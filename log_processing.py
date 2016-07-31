@@ -5,53 +5,115 @@ import ipdb
 
 class AverageProcessor(object):
 	"""
-	Class to process website user logs
+	Process website log file to produce user average time per session
+	
+	This implementation ingests records 
+	in the form "userid,timestamp,action"
+
+	Parameters
+    ----------
+    log_errors: string {'ignore', 'average'} or int, default='ignore'
+    	If 'ignore'
+
+    max_session: None or int, default=None
+    	If not None, set a maxium session length between
+    	'Open' and 'Close' actions to max_session minutes.
+
+    	In two subsequent sessions, setting max_session 
+    	accounts for potential co-occurrence of missing
+    	session-1's 'Close' record, and session-2's 'Open'
+    	record, which would innacurately inflate the session
+    	length.
+
+    input : string {'filename', 'file', 'content'}
+        If 'filename', the sequence passed as an argument to fit is
+        expected to be a list of filenames that need reading to fetch
+        the raw content to analyze.
+
+	Attributes
+    ----------
+    vocabulary_ : dict
+        A mapping of terms to feature indices.
 	"""
 
-	def __init__(self):
-		"""
-		initialize empty logProcessor
-		"""
+	def __init__(self, max_session=None):
+		self.max_session = max_session
 
-	def process(self, filename):
+	def process(self, logfile):
 		"""
-		top level function to process log file
-		"""
-		file = open(filename, 'r')
-		self.time_sessions = reduce(self.collect_time_sessions, file, {})
-		self.averages = {key: float(value[0])/value[1] \
-			for key, value in self.time_sessions.iteritems()}
-		file.close()
+		INPUT: logfile: string 
+		OUTPUT: list of tuples
 
-	def collect_time_sessions(self, collection, record):
+		Injests log file and returns list containing
+		(userid, average time) tuples.
 		"""
-		reduce function for use in self.process
+		file = open(logfile, 'r')
+		user_last_record = dict()
+		user_totals = dict()
 
-		returns dict "collection" for continued reduction
-		"""
-		r = record.strip().split(',')
-		userid, time, action = r[0], int(r[1]), r[2]
-		if userid not in collection:
-			collection[userid] = [0, 0, time, action]
-			return collection
-		last_record = collection[userid]
-		if last_record[3] == 'open' and action == 'close':
-			tot_time = last_record[0] + time - last_record[2]
-			sessions = collection[userid][1] + 1
-			update = [tot_time, sessions, time, action]
-			collection[userid] = update
-			return collection
-		else:
-			collection[userid][2] = time
-			collection[userid][3] = action
-			return collection
+		for line in file:
+			userid, time, action = self._get_fields_from_line(line)
 
-	def to_csv(self):
+			if userid not in user_last_record:
+				user_last_record[userid] = [time, action]
+				user_totals[userid] = [0, 0]
+				continue
+
+			last_time, last_action = user_last_record[userid]
+
+			if last_action == 'open' and action == 'close':
+				session_length = self._calc_session_length(time, last_time)
+				user_totals[userid][0] += session_length
+				user_totals[userid][1] += 1
+			user_last_record[userid] = [time, action]
+
+		averages = self._calc_averages(user_totals)
+		return averages
+
+	def _get_fields_from_line(self, line):
 		"""
+		INPUT: line: string 
+		OUTPUT: userid: string,
+				time: int,
+				action: string
+
+		Seperates and assgins a line "userid,timestamp,action\n"
+		into userid, time, action
 		"""
-		pass
+		record = line.strip().split(',')
+		return record[0], int(record[1]), record[2]
+
+	def _calc_session_length(self, time, last_time):
+		"""
+		INPUT: time: int, last_time: int 
+		OUTPUT: int
+
+		Returns session lenght by subtracting time stamps.
+		if self.max_session is not None, limits session length
+		to self.max_session minutes.
+		"""
+		session_length = time - last_time
+		if self.max_session != None:
+			max_seconds = self.max_session*60
+			if max_seconds < session_length:
+				session_length = max_seconds
+		return session_length
+
+	def _calc_averages(self, user_totals):
+		"""
+		INPUT: user_totals: dict of lists 
+		OUTPUT: list of tuples
+
+		Transforms user_totals into list of
+		(userid, average time) tuples.
+		"""
+		averages = list()
+		for userid, totals in user_totals.iteritems():
+			total_time, sessions = totals
+			averages.append((userid, float(total_time)/sessions))
+		return averages
+
 
 if __name__ == '__main__':
-	lp = logProcessor()
-	lp.process('test.log')
-	print lp.averages
+	ap = AverageProcessor()
+	ap.process('data/big_test.log')
