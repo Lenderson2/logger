@@ -3,7 +3,7 @@ import ipdb
 
 
 
-class logProcessor(object):
+class AverageProcessor(object):
 	"""
 	Class to process website user logs
 	"""
@@ -12,8 +12,6 @@ class logProcessor(object):
 		"""
 		initialize empty logProcessor
 		"""
-		self.time_sessions = None
-		self.averages = None
 
 	def process(self, filename):
 		"""
