@@ -12,14 +12,24 @@ class AverageProcessor(object):
 
 	Parameters
     ----------
-    log_errors: string {'ignore', 'average'} or int, default='ignore'
-    	If 'ignore'
+    default_session: int or None, default=None
+    	If not None, session length for two records 
+    	that are missing intermediary record(s) will
+    	be set to default_session. Otherwise sessions
+    	associated with subsequent 'close' or 'open' 
+    	records are ignored.
+
+    	If max_session not None, and default_session is None,
+    	default_session is set to max_session.
 
     max_session: None or int, default=None
     	If not None, set a maxium session length between
-    	'Open' and 'Close' actions to max_session minutes.
+    	'Open' and 'Close' actions to max_session minutes,
+    	and set session's length to default_session minutes.
+    	If max_session not None, and default_session == None,
+    	default_session is set to max_session.
 
-    	In two subsequent sessions, setting max_session 
+    	In two subsequent sessions '1' and '2', setting max_session 
     	accounts for potential co-occurrence of missing
     	session-1's 'Close' record, and session-2's 'Open'
     	record, which would innacurately inflate the session
@@ -36,7 +46,10 @@ class AverageProcessor(object):
         A mapping of terms to feature indices.
 	"""
 
-	def __init__(self, max_session=None):
+	def __init__(self, default_session=None, max_session=None):
+		self.default_session = default_session
+		if default_session == None and max_session != None:
+			self.default_session = max_session
 		self.max_session = max_session
 
 	def process(self, logfile):
@@ -49,28 +62,25 @@ class AverageProcessor(object):
 		"""
 		file = open(logfile, 'r')
 		user_last_record = dict()
-		user_totals = dict()
+		user_totals = defaultdict(lambda: [0,0])
 
 		for line in file:
-			userid, time, action = self._get_fields_from_line(line)
+			userid, time, action = self._parse_line(line)
 
-			if userid not in user_last_record:
-				user_last_record[userid] = [time, action]
-				user_totals[userid] = [0, 0]
-				continue
+			if userid in user_last_record:
+				last_time, last_action = user_last_record[userid]
+				session_length = self._calc_session_length(
+					time, action, last_time, last_action)
+				if session_length > 0:
+					user_totals[userid][0] += session_length
+					user_totals[userid][1] += 1
 
-			last_time, last_action = user_last_record[userid]
-
-			if last_action == 'open' and action == 'close':
-				session_length = self._calc_session_length(time, last_time)
-				user_totals[userid][0] += session_length
-				user_totals[userid][1] += 1
 			user_last_record[userid] = [time, action]
 
 		averages = self._calc_averages(user_totals)
 		return averages
 
-	def _get_fields_from_line(self, line):
+	def _parse_line(self, line):
 		"""
 		INPUT: line: string 
 		OUTPUT: userid: string,
@@ -83,21 +93,25 @@ class AverageProcessor(object):
 		record = line.strip().split(',')
 		return record[0], int(record[1]), record[2]
 
-	def _calc_session_length(self, time, last_time):
+	def _calc_session_length(self, time, action, last_time, last_action):
 		"""
-		INPUT: time: int, last_time: int 
+		INPUT: time: int,
+				action: str,
+				last_time: int,
+				last-action: str
 		OUTPUT: int
 
-		Returns session lenght by subtracting time stamps.
-		if self.max_session is not None, limits session length
-		to self.max_session minutes.
+		Using current and last record, determines
+		session length if applicable. Returns 0 otherwise.
 		"""
-		session_length = time - last_time
-		if self.max_session != None:
-			max_seconds = self.max_session*60
-			if max_seconds < session_length:
-				session_length = max_seconds
-		return session_length
+		if last_action == 'open' and action == 'close':
+			session_length = time - last_time
+			if (self.max_session != None
+					and self.max_session*60 < session_length):
+				return self.default_session*60
+			else:
+				return session_length
+		return 0
 
 	def _calc_averages(self, user_totals):
 		"""
