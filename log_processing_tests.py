@@ -82,3 +82,39 @@ def test_calc_session_length_max_session():
 	actual = 30*60
 	message = "result session length: {}. should be: {}".format(result, actual)
 	n.assert_equal(result, actual, message)
+
+# with max_session and 'close' 'close' sequence
+def test_calc_session_length_max_session_close_close():
+	ap = AverageProcessor(max_session=30)
+	time = 1435459567
+	action = 'close'
+	last_time = 1435456566
+	last_action = 'close'
+	result = ap._calc_session_length(time, action, last_time, last_action)
+	actual = 0
+	message = "result session length: {}. should be: {}".format(result, actual)
+	n.assert_equal(result, actual, message)
+
+# with default_session
+def test_calc_session_length_default_session():
+	ap = AverageProcessor(default_session=24)
+	time = 1435459567
+	action = 'close'
+	last_time = 1435456566
+	last_action = 'close'
+	result = ap._calc_session_length(time, action, last_time, last_action)
+	actual = 24*60
+	message = "result session length: {}. should be: {}".format(result, actual)
+	n.assert_equal(result, actual, message)
+
+# # with default_session and max_session
+# def test_calc_session_length_default_session_max_session():
+# 	ap = AverageProcessor(default_session=24, max_session=30)
+# 	time = 1435459567
+# 	action = 'close'
+# 	last_time = 1435456566
+# 	last_action = 'open'
+# 	result = ap._calc_session_length(time, action, last_time, last_action)
+# 	actual = 24*60
+# 	message = "result session length: {}. should be: {}".format(result, actual)
+# 	n.assert_equal(result, actual, message)

@@ -12,17 +12,7 @@ class AverageProcessor(object):
 
 	Parameters
     ----------
-    default_session: int or None, default=None
-    	If not None, session length for two records 
-    	that are missing intermediary record(s) will
-    	be set to default_session. Otherwise sessions
-    	associated with subsequent 'close' or 'open' 
-    	records are ignored.
-
-    	If max_session not None, and default_session is None,
-    	default_session is set to max_session.
-
-    max_session: None or int, default=None
+    max_session : None or int, default=None
     	If not None, set a maxium session length between
     	'Open' and 'Close' actions to max_session minutes,
     	and set session's length to default_session minutes.
@@ -33,24 +23,43 @@ class AverageProcessor(object):
     	accounts for potential co-occurrence of missing
     	session-1's 'Close' record, and session-2's 'Open'
     	record, which would innacurately inflate the session
-    	length.
+    	length. It also allows for discretionary session
+    	length limiting.
 
-    input : string {'filename', 'file', 'content'}
-        If 'filename', the sequence passed as an argument to fit is
-        expected to be a list of filenames that need reading to fetch
-        the raw content to analyze.
+    default_session : int or None, default=None
+    	If not None, session length for two records 
+    	that are missing intermediary record(s) will
+    	be set to default_session. Otherwise sessions
+    	associated with 'close''close' or 'open''open'
+    	log sequences are ignored.
+
+    	If max_session not None, and default_session is None,
+    	default_session is set to max_session.
+
+    correct_errors: boolean, default = False
+    	Non user facing control flow variable to prevent
+
 
 	Attributes
     ----------
-    vocabulary_ : dict
-        A mapping of terms to feature indices.
+    user_totals : dict
+    	Mapping of user ids to a list in the form of
+    	[user total time (int), user total sessions (int)]
+    user_averages : dict
+        A mapping of user ids to average seconds per visit
+        created during the 'process' method.
 	"""
 
-	def __init__(self, default_session=None, max_session=None):
-		self.default_session = default_session
-		if default_session == None and max_session != None:
-			self.default_session = max_session
+	def __init__(self, max_session=None,
+					default_session=None,
+					correct_errors=False):
 		self.max_session = max_session
+		self.default_session = default_session
+		self.correct_errors = False
+		if max_session != None and default_session == None:
+			self.default_session = max_session
+		if max_session == None and default_session != None:
+			self.correct_errors = True
 
 	def process(self, logfile):
 		"""
@@ -62,7 +71,7 @@ class AverageProcessor(object):
 		"""
 		file = open(logfile, 'r')
 		user_last_record = dict()
-		user_totals = defaultdict(lambda: [0,0])
+		self.user_totals = defaultdict(lambda: [0,0])
 
 		for line in file:
 			userid, time, action = self._parse_line(line)
@@ -72,13 +81,13 @@ class AverageProcessor(object):
 				session_length = self._calc_session_length(
 					time, action, last_time, last_action)
 				if session_length > 0:
-					user_totals[userid][0] += session_length
-					user_totals[userid][1] += 1
+					self.user_totals[userid][0] += session_length
+					self.user_totals[userid][1] += 1
 
 			user_last_record[userid] = [time, action]
 
-		averages = self._calc_averages(user_totals)
-		return averages
+		self.user_averages = self._calc_averages(self.user_totals)
+		return self.user_averages
 
 	def _parse_line(self, line):
 		"""
@@ -111,7 +120,14 @@ class AverageProcessor(object):
 				return self.default_session*60
 			else:
 				return session_length
-		return 0
+
+		elif (self.default_session != None 
+				and self.correct_errors
+				and action == last_action):
+			return self.default_session*60
+			
+		else:		
+			return 0
 
 	def _calc_averages(self, user_totals):
 		"""
