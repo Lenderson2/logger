@@ -1,5 +1,6 @@
 from collections import defaultdict
 import ipdb
+import argparse
 
 
 
@@ -12,33 +13,12 @@ class AverageProcessor(object):
 
 	Parameters
     ----------
-    max_session : None or int, default=None
-    	If not None, set a maxium session length between
-    	'Open' and 'Close' actions to max_session minutes,
-    	and set session's length to default_session minutes.
-    	If max_session not None, and default_session == None,
-    	default_session is set to max_session.
-
-    	In two subsequent sessions '1' and '2', setting max_session 
-    	accounts for potential co-occurrence of missing
-    	session-1's 'Close' record, and session-2's 'Open'
-    	record, which would innacurately inflate the session
-    	length. It also allows for discretionary session
-    	length limiting.
-
-    default_session : int or None, default=None
+    default_session : int, 'average' or None, default=None
     	If not None, session length for two records 
     	that are missing intermediary record(s) will
     	be set to default_session. Otherwise sessions
     	associated with 'close''close' or 'open''open'
     	log sequences are ignored.
-
-    	If max_session not None, and default_session is None,
-    	default_session is set to max_session.
-
-    correct_errors: boolean, default = False
-    	Non user facing control flow variable to prevent
-
 
 	Attributes
     ----------
@@ -50,16 +30,8 @@ class AverageProcessor(object):
         created during the 'process' method.
 	"""
 
-	def __init__(self, max_session=None,
-					default_session=None,
-					correct_errors=False):
-		self.max_session = max_session
+	def __init__(self, default_session=None):
 		self.default_session = default_session
-		self.correct_errors = False
-		if max_session != None and default_session == None:
-			self.default_session = max_session
-		if max_session == None and default_session != None:
-			self.correct_errors = True
 
 	def process(self, logfile):
 		"""
@@ -67,7 +39,7 @@ class AverageProcessor(object):
 		OUTPUT: list of tuples
 
 		Injests log file and returns list containing
-		(userid, average time) tuples.
+		(userid, average time in seconds) tuples.
 		"""
 		file = open(logfile, 'r')
 		user_last_record = dict()
@@ -114,18 +86,9 @@ class AverageProcessor(object):
 		session length if applicable. Returns 0 otherwise.
 		"""
 		if last_action == 'open' and action == 'close':
-			session_length = time - last_time
-			if (self.max_session != None
-					and self.max_session*60 < session_length):
-				return self.default_session*60
-			else:
-				return session_length
-
-		elif (self.default_session != None 
-				and self.correct_errors
-				and action == last_action):
-			return self.default_session*60
-			
+			return time - last_time
+		elif (self.default_session != None and action == last_action):
+			return self.default_session*60	
 		else:		
 			return 0
 
@@ -145,5 +108,17 @@ class AverageProcessor(object):
 
 
 if __name__ == '__main__':
-	ap = AverageProcessor()
-	ap.process('data/big_test.log')
+	parser = argparse.ArgumentParser()
+	parser.add_argument("filename",
+						help="path to log file to be processed",
+						type=str)
+	parser.add_argument("-d", "--default_session",
+						default=None,
+						type=int,
+                    	help="optional default session length for log errors.")
+	args = parser.parse_args()
+
+	# print args
+	ap = AverageProcessor(default_session=args.default_session)
+	results = ap.process(args.filename)
+	print results
