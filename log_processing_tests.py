@@ -7,7 +7,7 @@ from log_processing import AverageProcessor
 # process
 def test_process():
 	ap = AverageProcessor()
-	result = sorted(ap.process('test.log'), key=lambda x: x[0])
+	result = sorted(ap.process('data/test.log'), key=lambda x: x[0])
 	actual = [
 		('1', 3160),
 		('2', 4924),
@@ -27,7 +27,6 @@ def test_calc_averages():
 		'4': [4777, 1]
 	}
 	result = sorted(ap._calc_averages(user_totals), key=lambda x: x[0])
-	# result = ap._calc_averages(user_totals)
 	actual = [
 		('1', 3160),
 		('2', 4924),
@@ -54,7 +53,10 @@ def test_calc_session_length_open_close():
 	action = 'close'
 	last_time = 1435456566
 	last_action = 'open'
-	result = ap._calc_session_length(time, action, last_time, last_action)
+	user_totals = None
+	userid = None
+	result = ap._calc_session_length(
+		time, action, last_time, last_action, user_totals, userid)
 	actual = 1435459567 - 1435456566
 	message = "result session length: {}. should be: {}".format(result, actual)
 	n.assert_equal(result, actual, message)
@@ -66,7 +68,10 @@ def test_calc_session_length_close_close():
 	action = 'close'
 	last_time = 1435456566
 	last_action = 'close'
-	result = ap._calc_session_length(time, action, last_time, last_action)
+	user_totals = None
+	userid = None
+	result = ap._calc_session_length(
+		time, action, last_time, last_action, user_totals, userid)
 	actual = 0
 	message = "result session length: {}. should be: {}".format(result, actual)
 	n.assert_equal(result, actual, message)
@@ -78,7 +83,10 @@ def test_calc_session_length_default_session_int():
 	action = 'close'
 	last_time = 1435456566
 	last_action = 'close'
-	result = ap._calc_session_length(time, action, last_time, last_action)
+	user_totals = None
+	userid = None
+	result = ap._calc_session_length(
+		time, action, last_time, last_action, user_totals, userid)
 	actual = 24*60
 	message = "result session length: {}. should be: {}".format(result, actual)
 	n.assert_equal(result, actual, message)
@@ -91,7 +99,7 @@ def test_calc_session_length_default_session_average():
 	last_time = 1435456566
 	last_action = 'close'
 	user_totals = {'123': [1000, 2]}
-	user_id = '123'
+	userid = '123'
 	result = ap._calc_session_length(
 		time, action, last_time, last_action, user_totals, userid)
 	actual = float(user_totals[userid][0])/user_totals[userid][1]
